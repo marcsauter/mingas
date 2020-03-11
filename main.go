@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"strconv"
 
@@ -12,22 +13,35 @@ import (
 	"gonum.org/v1/plot/vg"
 )
 
+const (
+	// xSize is the size for the x axis
+	xSize = 180 * vg.Millimeter
+	// ySize is the size for the y axis
+	ySize = 130 * vg.Millimeter
+	// filename for the graph
+	filename = "mingas.png"
+)
+
+// nolint: gochecknoglobals
+var (
+	// maxDepth start depth [m] for calculations
+	maxDepth = 60
+	// minDepth end depth [m] for calculations
+	minDepth = 0
+	// depthStep for calculations
+	depthStep = 5
+)
+
 func main() {
 	var (
 		// AMV is the Atemminutenvolumen
-		amv = 30.0
-		// bottles volume in liters
+		amv = 30
+		// bottle volumes in liters
 		bottles = []int{10, 12, 15, 18, 20, 24}
-		// depthStart for calculations
-		depthStart = 60
-		// depthEnd for calculations
-		depthEnd = 0
-		// depthStep for calculations
-		depthStep = 5
 	)
 
 	if len(os.Args) == 2 {
-		v, err := strconv.ParseFloat(os.Args[1], 64)
+		v, err := strconv.Atoi(os.Args[1])
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -40,13 +54,13 @@ func main() {
 	for _, v := range bottles {
 		points := []*point{}
 
-		if depthStart < depthEnd {
-			depthStart, depthEnd = depthEnd, depthStart
+		if maxDepth < minDepth {
+			maxDepth, minDepth = minDepth, maxDepth
 		}
 
-		for d := depthStart; d > depthEnd; d -= depthStep {
+		for d := maxDepth; d > minDepth; d -= depthStep {
 			p := &point{
-				Depth: float64(d),
+				Depth: d,
 			}
 
 			p.Calc(amv)
@@ -63,39 +77,54 @@ func main() {
 }
 
 type point struct {
-	Depth  float64
-	MinGas float64
+	Depth  int
+	MinGas int
 }
 
-func (p *point) Calc(amv float64) {
+func (p *point) Calc(amv int) {
 	const (
 		// time at depth while trying to solve the problem
-		tdepth = 1
+		tdepth   = 1
+		consumer = 2
 	)
 
-	stepsMin := p.Depth / 2 / 3
-	stepsMax := stepsMin
-
-	if int(p.Depth/2)%3 > 0 {
-		stepsMax = stepsMin + 1
-	}
+	// e.g. 40m / 2 = 20m -> 20m / 3 = 6 Steps
+	steps := p.Depth / 2 / 3
 
 	// air consumption at depth while trying to solve the problem
-	air0 := 2.0 * amv * tdepth * (1 + (p.Depth / 10))
+	// e.g. 40m: 2 * 30 * 1 * (1 + (40/10)) = 600 l
+	air0 := consumer * amv * tdepth * (1 + (p.Depth / 10))
 
 	// air consumption during the ascent to half the depth
-	avDepth11 := (stepsMin*3 + p.Depth) / 2.0
-	tascent11 := (p.Depth - stepsMin*3) / 10.0
-	air1 := 2.0 * amv * tascent11 * (1 + (avDepth11 / 10.0))
+	// e.g. 40m->18m: (6 * 3 + 40) / 2.0 = 29
+	avDepth1 := float64(steps*3+p.Depth) / 2.0
+	// e.g. 40m->18m: (40m - 6 * 3m) / 10.0 = 2.2
+	tascent1 := float64(p.Depth-steps*3) / 10.0
+	// always round up to the next full minute
+	// e.g. 2.2 -> 3.0
+	if math.Round(tascent1) < tascent1 {
+		tascent1++
+	}
 
-	avDepth12 := (stepsMax*3 + p.Depth) / 2.0
-	tascent12 := (p.Depth - stepsMax*3) / 10.0
-	air2 := 2.0 * amv * tascent12 * (1 + (avDepth12 / 10.0))
+	tascent1 = math.Round(tascent1)
+	// air consumption
+	// e.g. 40m->18m: 2 * 30 * 3.0 * (1 + (29.0 / 10.0)) = 702
+	air1 := float64(consumer*amv) * tascent1 * (1 + (avDepth1 / 10.0))
 
-	p.MinGas = air0 + air1 + air2
+	// air consumption
+	// e.g. 18m->0m: (6 * 3) / 2.0 = 9.0
+	avDepth2 := float64(steps*3) / 2.0
+	// e.g. 18m->0m: 18 / 3 = 6 == steps
+	tascent2 := float64(steps)
+	// e.g. 18m->0m: 2 * 30 * 3.0 * 6.0 * (1 + (9.0 / 10.0)) = 2052.0
+	air2 := float64(consumer*amv) * tascent2 * (1 + (avDepth2 / 10.0))
+
+	fmt.Println(p.Depth, steps, air0, air1, air2)
+
+	p.MinGas = air0 + int(air1) + int(air2)
 }
 
-func plotChart(amv float64, bottles []int, data map[int][]*point) error {
+func plotChart(amv int, bottles []int, data map[int][]*point) error {
 	p, err := plot.New()
 	if err != nil {
 		return err
@@ -103,7 +132,10 @@ func plotChart(amv float64, bottles []int, data map[int][]*point) error {
 
 	p.Title.Text = fmt.Sprintf("mingas for AMV = %.0f l/min", amv)
 	p.X.Label.Text = "depth [m]"
+	p.X.Tick.Marker = depthTicks{}
 	p.Y.Label.Text = "mingas [bar]"
+	p.Y.Tick.Marker = gasTicks{}
+
 	g := plotter.NewGrid()
 	p.Add(g)
 
@@ -114,8 +146,8 @@ func plotChart(amv float64, bottles []int, data map[int][]*point) error {
 
 		for _, p := range data[v] {
 			points = append(points, plotter.XY{
-				X: p.Depth,
-				Y: p.MinGas / float64(v),
+				X: float64(p.Depth),
+				Y: float64(p.MinGas / v),
 			})
 		}
 
@@ -127,9 +159,41 @@ func plotChart(amv float64, bottles []int, data map[int][]*point) error {
 	}
 
 	// Save the plot to a PNG file.
-	if err := p.Save(180*vg.Millimeter, 140*vg.Millimeter, "mingas.png"); err != nil {
+	if err := p.Save(xSize, ySize, filename); err != nil {
 		panic(err)
 	}
 
 	return err
+}
+
+// custom ticks for depth axis
+type depthTicks struct{}
+
+func (depthTicks) Ticks(min, max float64) []plot.Tick {
+	t := []plot.Tick{}
+
+	for i := minDepth; i < maxDepth; i += depthStep {
+		t = append(t, plot.Tick{
+			Value: float64(i),
+			Label: fmt.Sprintf("%d", i),
+		})
+	}
+
+	return t
+}
+
+// custom ticks for gas axis
+type gasTicks struct{}
+
+func (gasTicks) Ticks(min, max float64) []plot.Tick {
+	t := []plot.Tick{}
+
+	for i := 0; i < 250; i += 10 {
+		t = append(t, plot.Tick{
+			Value: float64(i),
+			Label: fmt.Sprintf("%d", i),
+		})
+	}
+
+	return t
 }
