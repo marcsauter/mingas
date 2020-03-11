@@ -127,7 +127,7 @@ func plotChart(amv float64, bottles []int, data map[int][]*point) error {
 	}
 
 	// Save the plot to a PNG file.
-	if err := p.Save(120*vg.Millimeter, 90*vg.Millimeter, "mingas.png"); err != nil {
+	if err := p.Save(180*vg.Millimeter, 140*vg.Millimeter, "mingas.png"); err != nil {
 		panic(err)
 	}
 

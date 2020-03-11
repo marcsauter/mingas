@@ -1,5 +1,8 @@
 # mingas
 
+
+![mingas graph](mingas.png)
+
 ## Assumptions
 
 - half depth is always round down, e.g. 35 / 2 = 17.5 -> 17
