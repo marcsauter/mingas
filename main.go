@@ -92,7 +92,7 @@ func (p *point) Calc(amv int) {
 	steps := p.Depth / 2 / 3
 
 	// air consumption at depth while trying to solve the problem
-	// e.g. 40m: 2 * 30 * 1 * (1 + (40/10)) = 600 l
+	// e.g. 40m: 2 * 30 * 1 * (1 + (40/10)) = 300 l
 	air0 := consumer * amv * tdepth * (1 + (p.Depth / 10))
 
 	// air consumption during the ascent to half the depth
@@ -116,11 +116,12 @@ func (p *point) Calc(amv int) {
 	avDepth2 := float64(steps*3) / 2.0
 	// e.g. 18m->0m: 18 / 3 = 6 == steps
 	tascent2 := float64(steps)
-	// e.g. 18m->0m: 2 * 30 * 3.0 * 6.0 * (1 + (9.0 / 10.0)) = 2052.0
+	// e.g. 18m->0m: 2 * 30 * 6.0 * (1 + (9.0 / 10.0)) = 684
 	air2 := float64(consumer*amv) * tascent2 * (1 + (avDepth2 / 10.0))
 
 	fmt.Println(p.Depth, steps, air0, air1, air2)
 
+	// p.MinGas = 300 + 702 + 684 = 1686
 	p.MinGas = air0 + int(air1) + int(air2)
 }
 
@@ -130,7 +131,7 @@ func plotChart(amv int, bottles []int, data map[int][]*point) error {
 		return err
 	}
 
-	p.Title.Text = fmt.Sprintf("mingas for AMV = %.0f l/min", amv)
+	p.Title.Text = fmt.Sprintf("mingas for AMV = %.0d l/min", amv)
 	p.X.Label.Text = "depth [m]"
 	p.X.Tick.Marker = depthTicks{}
 	p.Y.Label.Text = "mingas [bar]"
