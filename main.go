@@ -119,8 +119,6 @@ func (p *point) Calc(amv int) {
 	// e.g. 18m->0m: 2 * 30 * 6.0 * (1 + (9.0 / 10.0)) = 684
 	air2 := float64(consumer*amv) * tascent2 * (1 + (avDepth2 / 10.0))
 
-	fmt.Println(p.Depth, steps, air0, air1, air2)
-
 	// p.MinGas = 300 + 702 + 684 = 1686
 	p.MinGas = air0 + int(air1) + int(air2)
 }
